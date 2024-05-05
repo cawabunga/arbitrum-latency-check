@@ -1,0 +1,9 @@
+[package]
+name = "arbitrum-latency-check-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ethers = { version = "2.0.14", features = ["ws", "ipc"] }
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
+eyre = "^0.6.12"
