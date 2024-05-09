@@ -1,10 +1,11 @@
 use ethers::prelude::{
-    Http, LocalWallet, Middleware, MiddlewareBuilder, Provider, ProviderExt, Signer, StreamExt,
-    TransactionRequest, Ws,
+    Http, Ipc, LocalWallet, Middleware, MiddlewareBuilder, Provider, ProviderExt, Signer,
+    StreamExt, TransactionRequest, Ws,
 };
 use eyre::Result;
 use std::env;
 use std::error::Error;
+use std::fmt::Debug;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use tokio::task::JoinSet;
@@ -20,7 +21,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .unwrap_or("10".to_string())
         .parse::<u64>()?;
 
-    let provider = Provider::<Ws>::connect(env::var("RPC_WS_URL")?).await?;
+    let provider = setup_ipc_provider().await?;
+
     let provider_tx = Arc::new(Provider::<Http>::connect(sequencer_url.as_str()).await);
 
     let wallet = env::var("PRIVATE_KEY")?
@@ -89,6 +91,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
     print_stats(tx_durations.lock().await.clone());
 
     Ok(())
+}
+
+async fn setup_ws_provider() -> Result<Provider<Ws>, Box<dyn Error>> {
+    let url = env::var("RPC_WS_URL")?;
+    Ok(Provider::<Ws>::connect(url).await?)
+}
+
+async fn setup_ipc_provider() -> Result<Provider<Ipc>, Box<dyn Error>> {
+    let path = env::var("RPC_IPC_PATH")?;
+    Ok(Provider::<Ipc>::connect_ipc(path).await?)
 }
 
 #[derive(Debug)]

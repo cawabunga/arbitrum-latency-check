@@ -9,7 +9,7 @@
 cargo build --release
 
 # Run the program
-PRIVATE_KEY=0xYOUR_KEY RPC_WS_URL=wss:// ./target/release/arbitrum-latency-check-rs
+PRIVATE_KEY=0xYOUR_KEY RPC_IPC_PATH_URL=/tmp/node.ipc ./target/release/arbitrum-latency-check-rs
 ```
 
 Other environment variables that can be set:
