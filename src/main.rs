@@ -10,14 +10,16 @@ use std::sync::Arc;
 use tokio::task::JoinSet;
 
 // Constants for transaction settings
-const TOTAL_TX: u64 = 3;
 const SEND_TX_EVERY: u64 = 10;
 const SEQUENCER_URL: &str = "https://arb1-sequencer.arbitrum.io/rpc";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let sequencer_url = env::var("SEQUENCER_URL").unwrap_or(SEQUENCER_URL.to_string());
+    let total_tx = env::var("TOTAL_TX")?.parse::<u64>().unwrap_or(10);
+
     let provider = Provider::<Ws>::connect(env::var("RPC_WS_URL")?).await?;
-    let provider_tx = Arc::new(Provider::<Http>::connect(SEQUENCER_URL).await);
+    let provider_tx = Arc::new(Provider::<Http>::connect(sequencer_url.as_str()).await);
 
     let wallet = env::var("PRIVATE_KEY")?
         .parse::<LocalWallet>()
@@ -43,7 +45,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut stream = provider.subscribe_blocks().await.unwrap();
     while let Some(block) = stream.next().await {
-        if block.number.unwrap().as_u64() % SEND_TX_EVERY == 0 && i < TOTAL_TX {
+        if block.number.unwrap().as_u64() % SEND_TX_EVERY == 0 && i < total_tx {
             let nonce = nonce.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let provider_tx = provider_tx.clone();
             let tx_durations = tx_durations.clone();
@@ -74,7 +76,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             i += 1;
         }
 
-        if i == TOTAL_TX {
+        if i == total_tx {
             break;
         }
     }
