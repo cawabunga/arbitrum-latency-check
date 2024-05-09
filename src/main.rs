@@ -16,7 +16,9 @@ const SEQUENCER_URL: &str = "https://arb1-sequencer.arbitrum.io/rpc";
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let sequencer_url = env::var("SEQUENCER_URL").unwrap_or(SEQUENCER_URL.to_string());
-    let total_tx = env::var("TOTAL_TX")?.parse::<u64>().unwrap_or(10);
+    let total_tx = env::var("TOTAL_TX")
+        .unwrap_or("10".to_string())
+        .parse::<u64>()?;
 
     let provider = Provider::<Ws>::connect(env::var("RPC_WS_URL")?).await?;
     let provider_tx = Arc::new(Provider::<Http>::connect(sequencer_url.as_str()).await);
