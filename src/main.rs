@@ -91,7 +91,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Wait for all transactions to be sent
     while join_set.join_next().await.is_some() {}
 
-    print_stats(tx_durations.lock().await.clone());
+    print_stats(tx_durations.lock().await.clone(), id);
 
     Ok(())
 }
@@ -111,6 +111,7 @@ async fn setup_ipc_provider() -> Result<Provider<Ipc>, Box<dyn Error>> {
 #[derive(Debug)]
 #[allow(dead_code)]
 struct Stats {
+    id: String,
     total_tx: u64,
     mean: std::time::Duration,
     median: std::time::Duration,
@@ -118,7 +119,7 @@ struct Stats {
     max: std::time::Duration,
 }
 
-fn print_stats(durations: Vec<std::time::Duration>) {
+fn print_stats(durations: Vec<std::time::Duration>, id: String) {
     // mean
     let sum: std::time::Duration = durations.iter().sum();
     let mean = sum / durations.len() as u32;
@@ -133,6 +134,7 @@ fn print_stats(durations: Vec<std::time::Duration>) {
     let max = tx_durations.iter().max().unwrap();
 
     let stats = Stats {
+        id,
         total_tx: durations.len() as u64,
         mean,
         median,
