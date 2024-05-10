@@ -16,6 +16,8 @@ const SEQUENCER_URL: &str = "https://arb1-sequencer.arbitrum.io/rpc";
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    let id = env::var("INSTANCE_ID").unwrap_or("0".to_string());
+
     let sequencer_url = env::var("SEQUENCER_URL").unwrap_or(SEQUENCER_URL.to_string());
     let total_tx = env::var("TOTAL_TX")
         .unwrap_or("10".to_string())
@@ -53,6 +55,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             let nonce = nonce.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let provider_tx = provider_tx.clone();
             let tx_durations = tx_durations.clone();
+            let id = id.clone();
 
             join_set.spawn(async move {
                 let now = std::time::Instant::now();
@@ -74,7 +77,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 let sent_in = now.elapsed();
                 tx_durations.lock().await.push(sent_in);
 
-                println!("{},{:?}", block.number.unwrap(), sent_in);
+                println!("{},{},{:?}", id, block.number.unwrap(), sent_in);
             });
 
             i += 1;
