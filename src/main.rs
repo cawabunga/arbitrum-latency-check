@@ -21,7 +21,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .unwrap_or("10".to_string())
         .parse::<u64>()?;
 
-    let provider = setup_ipc_provider().await?;
+    let provider = setup_ws_provider().await?;
 
     let provider_tx = Arc::new(Provider::<Http>::connect(sequencer_url.as_str()).await);
 
@@ -93,17 +93,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+#[allow(dead_code)]
 async fn setup_ws_provider() -> Result<Provider<Ws>, Box<dyn Error>> {
     let url = env::var("RPC_WS_URL")?;
     Ok(Provider::<Ws>::connect(url).await?)
 }
 
+#[allow(dead_code)]
 async fn setup_ipc_provider() -> Result<Provider<Ipc>, Box<dyn Error>> {
     let path = env::var("RPC_IPC_PATH")?;
     Ok(Provider::<Ipc>::connect_ipc(path).await?)
 }
 
 #[derive(Debug)]
+#[allow(dead_code)]
 struct Stats {
     total_tx: u64,
     mean: std::time::Duration,
