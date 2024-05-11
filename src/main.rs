@@ -51,9 +51,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut join_set = JoinSet::new();
     let mut i = 0;
 
-    let mut stream = provider.subscribe_blocks().await.unwrap();
-    while let Some(block) = stream.next().await {
-        if block.number.unwrap().as_u64() % tx_each == 0 && i < tx_total {
+    let (new_block_tx, mut new_block_rx) = tokio::sync::mpsc::channel::<u64>(1);
+
+    join_set.spawn(async move {
+        let mut stream = provider.subscribe_blocks().await.unwrap();
+        while let Some(block) = stream.next().await {
+            new_block_tx
+                .send(block.number.unwrap().as_u64())
+                .await
+                .unwrap();
+
+            if i == tx_total {
+                drop(new_block_tx);
+                break;
+            }
+        }
+    });
+
+    while let Some(block_number) = new_block_rx.recv().await {
+        if block_number % tx_each == 0 && i < tx_total {
             let nonce = nonce.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let provider_tx = provider_tx.clone();
             let tx_durations = tx_durations.clone();
@@ -79,14 +95,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 let sent_in = now.elapsed();
                 tx_durations.lock().await.push(sent_in);
 
-                println!("{},{},{:?}", id, block.number.unwrap(), sent_in);
+                println!("{},{},{:?}", id, block_number, sent_in);
             });
 
             i += 1;
-        }
-
-        if i == tx_total {
-            break;
         }
     }
 
