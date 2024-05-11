@@ -51,26 +51,47 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut join_set = JoinSet::new();
     let mut i = 0;
 
-    let (new_block_tx, mut new_block_rx) = tokio::sync::mpsc::channel::<u64>(1);
+    let (new_block_tx, mut new_block_rx) = tokio::sync::mpsc::channel::<(u64, &str)>(1);
 
+    let provider_clone = provider.clone();
+    let new_block_tx_clone = new_block_tx.clone();
     join_set.spawn(async move {
-        let mut stream = provider.subscribe_blocks().await.unwrap();
+        let mut stream = provider_clone.subscribe_blocks().await.unwrap();
         while let Some(block) = stream.next().await {
-            println!("New block");
-            new_block_tx
-                .send(block.number.unwrap().as_u64())
+            new_block_tx_clone
+                .send((block.number.unwrap().as_u64(), "subscribe"))
                 .await
                 .unwrap();
 
             if i == tx_total {
-                drop(new_block_tx);
+                drop(new_block_tx_clone);
                 break;
             }
         }
     });
 
-    while let Some(block_number) = new_block_rx.recv().await {
-        println!("Handle new block");
+    let provider_clone = provider.clone();
+    let new_block_tx_clone = new_block_tx.clone();
+    join_set.spawn(async move {
+        // just poll for new blocks instead of subscribing
+        let mut last_block = provider_clone.get_block_number().await.unwrap().as_u64();
+        loop {
+            let current_block = provider_clone.get_block_number().await.unwrap().as_u64();
+            if current_block > last_block {
+                new_block_tx.send((current_block, "poll")).await.unwrap();
+                last_block = current_block;
+            }
+
+            if i == tx_total {
+                drop(new_block_tx_clone);
+                break;
+            }
+        }
+    });
+
+    while let Some((block_number, initiator)) = new_block_rx.recv().await {
+        println!("New block from {}: {}", initiator, block_number);
+
         if block_number % tx_each == 0 && i < tx_total {
             let nonce = nonce.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let provider_tx = provider_tx.clone();
