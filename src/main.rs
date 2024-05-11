@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use std::env;
 use std::error::Error;
 use std::fmt::Debug;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::task::JoinSet;
 
@@ -50,12 +50,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let tx_durations = Arc::new(tokio::sync::Mutex::new(Vec::new()));
 
     let mut join_set = JoinSet::new();
-    let mut i = 0;
+    let i = Arc::new(AtomicU64::new(0));
 
     let (new_block_tx, mut new_block_rx) = tokio::sync::mpsc::channel::<(u64, &str)>(1);
 
     let provider_clone = provider.clone();
     let new_block_tx_clone = new_block_tx.clone();
+    let i_clone = i.clone();
     join_set.spawn(async move {
         let mut stream = provider_clone.subscribe_blocks().await.unwrap();
         while let Some(block) = stream.next().await {
@@ -64,7 +65,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .await
                 .unwrap();
 
-            if i == tx_total {
+            if i_clone.load(Ordering::SeqCst) == tx_total {
                 drop(new_block_tx_clone);
                 break;
             }
@@ -73,6 +74,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let provider_clone = provider.clone();
     let new_block_tx_clone = new_block_tx.clone();
+    let i_clone = i.clone();
     join_set.spawn(async move {
         // just poll for new blocks instead of subscribing
         let mut last_block = provider_clone.get_block_number().await.unwrap().as_u64();
@@ -83,7 +85,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 last_block = current_block;
             }
 
-            if i == tx_total {
+            if i_clone.load(Ordering::SeqCst) == tx_total {
                 drop(new_block_tx_clone);
                 break;
             }
@@ -92,15 +94,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut processed_blocks = HashSet::new();
 
-    while let Some((block_number, initiator)) = new_block_rx.recv().await {
-        println!("New block from {}: {}", initiator, block_number);
-
+    while let Some((block_number, _)) = new_block_rx.recv().await {
         if processed_blocks.contains(&block_number) {
             continue;
         }
         processed_blocks.insert(block_number);
 
-        if block_number % tx_each == 0 && i < tx_total {
+        if block_number % tx_each == 0 && i.load(Ordering::SeqCst) < tx_total {
             let nonce = nonce.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let provider_tx = provider_tx.clone();
             let tx_durations = tx_durations.clone();
@@ -129,7 +129,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 println!("{},{},{:?}", id, block_number, sent_in);
             });
 
-            i += 1;
+            i.fetch_add(1, Ordering::SeqCst);
         }
     }
 
