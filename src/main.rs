@@ -3,6 +3,7 @@ use ethers::prelude::{
     StreamExt, TransactionRequest, Ws,
 };
 use eyre::Result;
+use std::collections::HashSet;
 use std::env;
 use std::error::Error;
 use std::fmt::Debug;
@@ -89,8 +90,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     });
 
+    let mut processed_blocks = HashSet::new();
+
     while let Some((block_number, initiator)) = new_block_rx.recv().await {
         println!("New block from {}: {}", initiator, block_number);
+
+        if processed_blocks.contains(&block_number) {
+            continue;
+        }
+        processed_blocks.insert(block_number);
 
         if block_number % tx_each == 0 && i < tx_total {
             let nonce = nonce.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
