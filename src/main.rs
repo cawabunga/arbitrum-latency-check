@@ -56,6 +56,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     join_set.spawn(async move {
         let mut stream = provider.subscribe_blocks().await.unwrap();
         while let Some(block) = stream.next().await {
+            println!("New block");
             new_block_tx
                 .send(block.number.unwrap().as_u64())
                 .await
@@ -69,6 +70,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     });
 
     while let Some(block_number) = new_block_rx.recv().await {
+        println!("Handle new block");
         if block_number % tx_each == 0 && i < tx_total {
             let nonce = nonce.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             let provider_tx = provider_tx.clone();
