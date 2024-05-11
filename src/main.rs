@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .unwrap_or(SEND_TX_EACH.to_string())
         .parse::<u64>()?;
 
-    let provider = setup_ws_provider().await?;
+    let provider = setup_ipc_provider().await?;
 
     let provider_tx = Arc::new(Provider::<Http>::connect(sequencer_url.as_str()).await);
 
