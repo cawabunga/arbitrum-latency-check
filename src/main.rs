@@ -16,7 +16,7 @@ use tokio::task::JoinSet;
 const SEND_TX_EACH: u64 = 10;
 const SEQUENCER_URL: &str = "https://arb1-sequencer.arbitrum.io/rpc";
 
-#[tokio::main]
+#[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
     let id = env::var("INSTANCE_ID").unwrap_or("0".to_string());
     let sequencer_url = env::var("SEQUENCER_URL").unwrap_or(SEQUENCER_URL.to_string());
