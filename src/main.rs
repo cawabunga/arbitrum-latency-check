@@ -1,5 +1,5 @@
 use ethers::prelude::{
-    Http, Ipc, LocalWallet, Middleware, MiddlewareBuilder, Provider, ProviderExt, Signer,
+    Filter, Http, Ipc, LocalWallet, Middleware, MiddlewareBuilder, Provider, ProviderExt, Signer,
     StreamExt, TransactionRequest, Ws,
 };
 use eyre::Result;
@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             .await?
             .as_u64(),
     );
-    let gas_price = provider.get_gas_price().await?;
+    let gas_price = provider.get_gas_price().await? * 5;
 
     let tx_durations = Arc::new(tokio::sync::Mutex::new(Vec::new()));
 
@@ -183,8 +183,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[allow(dead_code)]
 async fn setup_ws_provider() -> Result<Provider<Ws>, Box<dyn Error>> {
-    let url = env::var("RPC_WS_URL")?;
-    Ok(Provider::<Ws>::connect(url).await?)
+    // let url = env::var("RPC_WS_URL")?;
+    Ok(Provider::<Ws>::connect("ws://34.65.31.128:8546").await?)
 }
 
 #[allow(dead_code)]
