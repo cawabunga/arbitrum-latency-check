@@ -3,18 +3,24 @@ use ethers::prelude::{
     StreamExt, TransactionRequest, Ws,
 };
 use eyre::Result;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::error::Error;
 use std::fmt::Debug;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-use std::time::{Instant, SystemTime};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 use tokio::task::JoinSet;
 
 // Constants for transaction settings
 const SEND_TX_EACH: u64 = 10;
 const SEQUENCER_URL: &str = "https://arb1-sequencer.arbitrum.io/rpc";
+
+#[derive(Default)]
+struct BlockTimes {
+    subscribe_times: HashMap<u64, Instant>,
+    poll_times: HashMap<u64, Instant>,
+}
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -53,20 +59,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let mut join_set = JoinSet::new();
     let i = Arc::new(AtomicU64::new(0));
 
-    let (new_block_tx, mut new_block_rx) = tokio::sync::mpsc::channel::<(u64, &str, SystemTime)>(1);
+    let (new_block_tx, mut new_block_rx) = tokio::sync::mpsc::channel::<(u64, &str, Instant)>(1);
+    let block_times = Arc::new(Mutex::new(BlockTimes::default()));
 
     let provider_clone = provider.clone();
     let new_block_tx_clone = new_block_tx.clone();
     let i_clone = i.clone();
+    let block_times_clone = block_times.clone();
     join_set.spawn(async move {
         let mut stream = provider_clone.subscribe_blocks().await.unwrap();
         while let Some(block) = stream.next().await {
+            let block_number = block.number.unwrap().as_u64();
+
+            block_times_clone
+                .lock()
+                .unwrap()
+                .subscribe_times
+                .entry(block_number)
+                .or_insert(Instant::now());
+
             new_block_tx_clone
-                .send((
-                    block.number.unwrap().as_u64(),
-                    "subscribe",
-                    SystemTime::now(),
-                ))
+                .send((block_number, "subscribe", Instant::now()))
                 .await
                 .unwrap();
 
@@ -80,14 +93,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let provider_clone = provider.clone();
     let new_block_tx_clone = new_block_tx.clone();
     let i_clone = i.clone();
+    let block_times_clone = block_times.clone();
     join_set.spawn(async move {
         // just poll for new blocks instead of subscribing
         let mut last_block = provider_clone.get_block_number().await.unwrap().as_u64();
         loop {
             let current_block = provider_clone.get_block_number().await.unwrap().as_u64();
             if current_block > last_block {
+                block_times_clone
+                    .lock()
+                    .unwrap()
+                    .poll_times
+                    .entry(current_block)
+                    .or_insert(Instant::now());
+
                 new_block_tx
-                    .send((current_block, "poll", SystemTime::now()))
+                    .send((current_block, "poll", Instant::now()))
                     .await
                     .unwrap();
                 last_block = current_block;
@@ -102,8 +123,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let mut processed_blocks = HashSet::new();
 
-    while let Some((block_number, initiator, now)) = new_block_rx.recv().await {
-        println!("New block: {} {} {:?}", block_number, initiator, now);
+    while let Some((block_number, initiator, _)) = new_block_rx.recv().await {
+        let times = block_times.lock().unwrap();
+        if times.subscribe_times.contains_key(&block_number)
+            && times.poll_times.contains_key(&block_number)
+        {
+            let subscribe_time = times.subscribe_times[&block_number];
+            let poll_time = times.poll_times[&block_number];
+            let diff = poll_time - subscribe_time;
+            println!("{},{},{},{:?}", id, block_number, initiator, diff);
+        }
+        drop(times);
+
         if processed_blocks.contains(&block_number) {
             continue;
         }
